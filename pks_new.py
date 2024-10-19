@@ -5,6 +5,7 @@ import socket
 import struct
 import threading
 import time
+import base64
 
 # GLOBAL VARIABLES
 # ip 172.28.128.1
@@ -15,6 +16,7 @@ switch = False
 transfer = False
 file = False
 sender = False
+header_format = "BHHHHHH"
 
 def reset_global_variables():  # RESET GLOBAL VARIABLES
     global keep_alive_running, user_input, on, switch, transfer, file, sender
@@ -30,8 +32,46 @@ def reset_global_variables():  # RESET GLOBAL VARIABLES
 def user_input_thread():
     global user_input
     while keep_alive_running:
-        input_user = input("Enter : M for message send, F for file Send, E for Exit\n  :")
+        input_user = input("Enter : M for message send, F for file Send, E for Exit\n")
         user_input = input_user
+
+def create_header(head_type,sequence_number, acknowledgment_number, fragment_offset, window_size, data_length, crc):
+    global header_format
+    header = struct.pack( header_format,head_type, sequence_number,acknowledgment_number,
+                          fragment_offset, window_size,data_length, crc)
+    return header
+
+def send_packet_data(type_header, socket_your, address_port_sending, sequence_number, acknowledgment_number,
+                     fragment_offset, window_size, data_length, crc , data):
+    global header_format
+    header = struct.pack(header_format, type_header, 0, 0, 0, 0, 0, 0)
+    encoded_data = base64.b16encode(data.encode('utf-8')) # Convert string to bytes
+
+    # Send the header and data together
+    socket_your.sendto(header + encoded_data, address_port_sending)
+
+
+def send_info_packet_type_only(type_header, socket_your, address_port_sending):
+    global header_format
+    header = struct.pack(header_format, type_header, 0, 0, 0, 0, 0, 0)
+    socket_your.sendto(header, address_port_sending)  # send type info message
+
+def retrieve_header(header):
+    global header_format
+    header = header[:14]
+    # Unpack the header to retrieve the values
+    unpacked_data = struct.unpack(header_format, header)
+    (header_type, sequence_number, acknowledgment_number, fragment_offset,
+     window_size, data_length, crc) = unpacked_data
+    return {
+        'header_type': header_type,
+        'sequence_number': sequence_number,
+        'acknowledgment_number': acknowledgment_number,
+        'fragment_offset': fragment_offset,
+        'window_size': window_size,
+        'data_length': data_length,
+        'crc': crc,
+    }
 
 
 def peer_to_peer_start():  # P2P start
@@ -52,27 +92,33 @@ def peer_to_peer_start():  # P2P start
             if start_connection == "y":
                 # INITIATE CONNECTION 3-WAY-HANDSHAKE
                 # "0" = SYN  "1" = SYN-ACK   "2" = ACK
-                socket_your.sendto(str.encode("0"), address_port_sending) # sent "0" = SYN
+                send_info_packet_type_only(0, socket_your, address_port_sending) # sent "0" = SYN
+                print("SYN SENT :", address_port_sending)
                 data, _ = socket_your.recvfrom(1500) # check if "1" = SYN-ACK received
-                if data.decode() == "1":
+                type_header = retrieve_header(data).get("header_type")
+                if type_header == 1:
                     print("SYN-ACK RECEIVED :", address_port_sending)
-                    socket_your.sendto(str.encode("2"), address_port_sending) # Sent "2" = ACK
+                    send_info_packet_type_only(2, socket_your, address_port_sending)  # Sent "2" = ACK
+                    print("ACK SENT :", address_port_sending)
                     connected = True
-                    print("Connected.")
+                    print("CONNECTED .")
                 else:
                     print("Not connected try again SYN-ACK not received")
             elif start_connection == "n":
                 # WAITING FOR CONNECTION 3-WAY-HANDSHAKE
                 # "0" = SYN  "1" = SYN-ACK   "2" = ACK
                 data, _ = socket_your.recvfrom(1500) # check if "0" = SYN
-                if data.decode() == "0":
+                type_header = retrieve_header(data).get("header_type")
+                if type_header == 0:
                     print("SYN RECEIVED :", address_port_sending)
-                    socket_your.sendto(str.encode("1"), address_port_sending) #sent "1" = SYN-ACK
+                    send_info_packet_type_only(1, socket_your, address_port_sending) #sent "1" = SYN-ACK
+                    print("SYN-ACK SENT :", address_port_sending)
                     data, _ = socket_your.recvfrom(1500)  # check if "2" = ACK received
-                    if data.decode() == "2":
+                    type_header = retrieve_header(data).get("header_type")
+                    if type_header == 2:
                         print("ACK RECEIVED :", address_port_sending)
                         connected = True
-                        print("Connected.")
+                        print("CONNECTED . \n")
                     else:
                         print("Not connected try again ACK not received")
                 else:
@@ -84,26 +130,29 @@ def peer_to_peer_start():  # P2P start
     main_loop(socket_your, address_port_sending)
 
 
-# Keep Alive Thread "0" = SYN AND "1" = SYN-ACK
+# Keep Alive Thread "0" = SYN
 def keep_alive_thread(socket_your, address_port_sending):
     global keep_alive_running, on, switch, transfer, file
     while keep_alive_running:
         socket_your.settimeout(60)
         try:
-            socket_your.sendto(str.encode("0"), address_port_sending)  # sent "0" = SYN
+            send_info_packet_type_only(0, socket_your, address_port_sending) # sent 0 = SYN
             data, _ = socket_your.recvfrom(1500)
-            if data.decode() == "0": # received "0" = SYN
-                print("KeepAlive received SYN from :", address_port_sending)
+            type_header = retrieve_header(data).get("header_type")
+            if type_header == 0: # received 0 = SYN
+                print("KeepAlive from :", address_port_sending)
 
             # SOMETHING ELSE RECEIVED
 
-            elif data.decode() == "3":# received "3" = Sending message
+            elif type_header == 3:# received 3 = Sending message
                 transfer = True
                 keep_alive_running = False
-                print("Sending message received from :", address_port_sending)
+                print("Sending message comm from :", address_port_sending)
+                send_info_packet_type_only(3, socket_your, address_port_sending) # sent "3" = message transfer
                 break
-            elif data.decode() == "4":# received "4" = Exit
+            elif type_header == 4:# received 4 = Exit
                 print("Exit received from :", address_port_sending)
+                send_info_packet_type_only(4, socket_your, address_port_sending)  # sent "4" = exit
                 on = False
                 break
 
@@ -126,7 +175,7 @@ def start_threads(socket_your, address_port):
 
 def end_threads(user_inp_thread, keep_ali_thread):
     global keep_alive_running
-    print("PRESS F TO CONTINUE")
+    print("-- ENTER ANYTHING TO CONTINUE --")
     keep_alive_running = False
     keep_ali_thread.join()
     user_inp_thread.join()
@@ -134,11 +183,17 @@ def end_threads(user_inp_thread, keep_ali_thread):
 def receive_message(socket_your, address_port_sending):
     # Receive message
     try:
+        print("\nMessage transfer started")
         print("Sending '2' = ACK ", "\n")
         socket_your.settimeout(60)
-        socket_your.sendto(str.encode("2"), address_port_sending)  # sent "2" = ACK
-        data, _ = socket_your.recvfrom(1500)
-        print("Message received :", data, "\n")
+        send_info_packet_type_only(2, socket_your, address_port_sending)  # sent "2" = ACK
+        while True:
+            data, _ = socket_your.recvfrom(1500)
+            header = retrieve_header(data)
+            if header.get("header_type") == 6: # 6 = Data packet
+                break
+        only_data = data[14:]
+        print("Message received :", base64.b16decode(only_data).decode('utf-8'), "\n")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except socket.gaierror as e:
@@ -146,29 +201,27 @@ def receive_message(socket_your, address_port_sending):
 
 def send_message(socket_your, address_port_sending):
     # SEND MESSAGE
-    global user_input
-    old_input = user_input
     ack = False
     count = 0
-    while not ack:
-        try:
-            socket_your.settimeout(60)
-            data, _ = socket_your.recvfrom(1500)  # check if "2" = ACK received
-            if data.decode() == "2":
-                print("ACK RECEIVED :", address_port_sending, "\n")
-                # sending message
-                print("Enter message to SEND :")
-                while old_input == user_input:
-                    time.sleep(2)
-                string_to_send = user_input
-                socket_your.sendto(str.encode(string_to_send), address_port_sending)
-                print("Message sent : " + string_to_send, "\n")
-                ack = True
-            count += 1
-        except socket.timeout:
-            print("Timeout, no response. Retrying...")
-        except socket.gaierror as e:
-            print(f"Error occurred: {e}")
+    try:
+        print("\nMessage transfer started")
+        socket_your.settimeout(60)
+        data, _ = socket_your.recvfrom(1500)  # check if "2" = ACK received
+        header = retrieve_header(data)
+        if header.get("header_type") == 2:
+            print("ACK RECEIVED :", address_port_sending, "\n")
+            # sending message
+            string_to_send = input("Enter message to SEND :")
+            send_packet_data(6, socket_your, address_port_sending, 0, 0,
+                             0, 0, 0, 0, string_to_send)
+            #socket_your.sendto(str.encode(string_to_send), address_port_sending)
+            print("Message sent : " + string_to_send, "\n")
+            # ack = True
+        count += 1
+    except socket.timeout:
+        print("Timeout, no response. Retrying...")
+    except socket.gaierror as e:
+        print(f"Error occurred: {e}")
 
 
 def main_loop(socket_your, address_port_sending):  # main loop
@@ -181,30 +234,26 @@ def main_loop(socket_your, address_port_sending):  # main loop
             end_threads(user_inp_thread, keep_ali_thread)
             break
         if transfer:
-            print("\nFile/Message transfer started")
-            # Turn off keep alive
-            keep_alive_running = False
-            keep_ali_thread.join()
+            end_threads(user_inp_thread, keep_ali_thread) # turn off keepalive
             if sender:
                 send_message(socket_your, address_port_sending)
             else:
                 receive_message(socket_your, address_port_sending)
-            # Start again
+
+            # Start again threads
             reset_global_variables()
             print("\nFile/Message transfer stopped")
             keep_ali_thread, user_inp_thread = start_threads(socket_your, address_port_sending)
         user_input = user_input.lower()
         match user_input:
             case "e":
-                on = False
-                socket_your.sendto(str.encode("4"), address_port_sending) # sent "4" = exit
+                send_info_packet_type_only(4, socket_your, address_port_sending) # sent "4" = exit
             case "m":
                 sender = True
-                transfer = True
-                socket_your.sendto(str.encode("3"), address_port_sending) # sent "3" = message transfer
+                send_info_packet_type_only(3, socket_your, address_port_sending) # sent "3" = message transfer
             case "f":
                 x = 0
-        time.sleep(2)
+        time.sleep(1)
     socket_your.close()
 
 # MAIN LOOP
