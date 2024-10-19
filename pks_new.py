@@ -150,7 +150,7 @@ def send_message(socket_your, address_port_sending):
     old_input = user_input
     ack = False
     count = 0
-    while not ack and count < 4:
+    while not ack:
         try:
             socket_your.settimeout(60)
             data, _ = socket_your.recvfrom(1500)  # check if "2" = ACK received
@@ -172,11 +172,12 @@ def send_message(socket_your, address_port_sending):
 
 
 def main_loop(socket_your, address_port_sending):  # main loop
-    global user_input, transfer, keep_alive_running, file, sender
+    global user_input, transfer, keep_alive_running, file, sender, on
     reset_global_variables()
     (keep_ali_thread, user_inp_thread) = start_threads(socket_your, address_port_sending)
     while True:
         if on is False:  # When exit is initiated by other side exit
+            print("Exit received from :", address_port_sending)
             end_threads(user_inp_thread, keep_ali_thread)
             break
         if transfer:
@@ -195,7 +196,8 @@ def main_loop(socket_your, address_port_sending):  # main loop
         user_input = user_input.lower()
         match user_input:
             case "e":
-                x = 0
+                on = False
+                socket_your.sendto(str.encode("4"), address_port_sending) # sent "4" = exit
             case "m":
                 sender = True
                 transfer = True
