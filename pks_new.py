@@ -17,7 +17,7 @@ file = False
 sender = False
 
 def reset_global_variables():  # RESET GLOBAL VARIABLES
-    global keep_alive_running, user_input, on, switch, transfer, file
+    global keep_alive_running, user_input, on, switch, transfer, file, sender
     keep_alive_running = True
     user_input = ""
     on = True
@@ -41,8 +41,8 @@ def peer_to_peer_start():  # P2P start
         try:
             #SET USER INPUT
             port_your = input("Input port you are listening on: ")
-            address_sending = input("Input ip of server you are sending to: ")
-            port_sending = input("Input port server is listening on: ")
+            address_sending = input("Input ip you are sending to: ")
+            port_sending = input("Input port you are sending to: ")
             start_connection = input("Want to Start connection? (Y/N): ").strip().lower()
             #SET UP SOCKET
             socket_your = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -134,11 +134,11 @@ def end_threads(user_inp_thread, keep_ali_thread):
 def receive_message(socket_your, address_port_sending):
     # Receive message
     try:
-        print("Sending ack")
+        print("Sending '2' = ACK ", "\n")
         socket_your.settimeout(60)
         socket_your.sendto(str.encode("2"), address_port_sending)  # sent "2" = ACK
         data, _ = socket_your.recvfrom(1500)
-        print("Message received : ", data)
+        print("Message received :", data, "\n")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except socket.gaierror as e:
@@ -149,27 +149,29 @@ def send_message(socket_your, address_port_sending):
     global user_input
     old_input = user_input
     ack = False
-    while not ack:
+    count = 0
+    while not ack and count < 4:
         try:
             socket_your.settimeout(60)
             data, _ = socket_your.recvfrom(1500)  # check if "2" = ACK received
             if data.decode() == "2":
-                print("ACK RECEIVED :", address_port_sending)
+                print("ACK RECEIVED :", address_port_sending, "\n")
                 # sending message
-                print("Enter message to send : ")
+                print("Enter message to SEND :")
                 while old_input == user_input:
                     time.sleep(2)
                 string_to_send = user_input
                 socket_your.sendto(str.encode(string_to_send), address_port_sending)
-                print("Message sent : " + string_to_send)
+                print("Message sent : " + string_to_send, "\n")
                 ack = True
+            count += 1
         except socket.timeout:
             print("Timeout, no response. Retrying...")
         except socket.gaierror as e:
             print(f"Error occurred: {e}")
 
 
-def main_loop(socket_your, address_port_sending):  # Server main loop
+def main_loop(socket_your, address_port_sending):  # main loop
     global user_input, transfer, keep_alive_running, file, sender
     reset_global_variables()
     (keep_ali_thread, user_inp_thread) = start_threads(socket_your, address_port_sending)
@@ -178,7 +180,7 @@ def main_loop(socket_your, address_port_sending):  # Server main loop
             end_threads(user_inp_thread, keep_ali_thread)
             break
         if transfer:
-            print("File/Message transfer started")
+            print("\nFile/Message transfer started")
             # Turn off keep alive
             keep_alive_running = False
             keep_ali_thread.join()
@@ -188,7 +190,7 @@ def main_loop(socket_your, address_port_sending):  # Server main loop
                 receive_message(socket_your, address_port_sending)
             # Start again
             reset_global_variables()
-            print("File/Message transfer stopped")
+            print("\nFile/Message transfer stopped")
             keep_ali_thread, user_inp_thread = start_threads(socket_your, address_port_sending)
         user_input = user_input.lower()
         match user_input:
@@ -197,7 +199,6 @@ def main_loop(socket_your, address_port_sending):  # Server main loop
             case "m":
                 sender = True
                 transfer = True
-                keep_alive_running = False
                 socket_your.sendto(str.encode("3"), address_port_sending) # sent "3" = message transfer
             case "f":
                 x = 0
