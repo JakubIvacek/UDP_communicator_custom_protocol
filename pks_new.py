@@ -164,50 +164,6 @@ def peer_to_peer_start():  # P2P start
     main_loop(socket_your, address_port_sending)
 
 
-# --------------------------------   MESSAGE TRANSFER RECEIVE/SEND
-def receive_message(socket_your, address_port_sending):
-    # Receive message
-    try:
-        print("\nMessage transfer started")
-        print("Sending '2' = ACK ", "\n")
-        socket_your.settimeout(60)
-        send_info_packet_type_only(2, socket_your, address_port_sending)  # sent "2" = ACK
-        while True:  # sometimes 0 from keepalive is received first so im waiting for 6 Data packet
-            data, _ = socket_your.recvfrom(1500)
-            header = retrieve_header(data)
-            if header.get("header_type") == 6:  # 6 = Data packet
-                break
-        only_data = data[header_size:]
-        print("Message received :", only_data.decode(), "\n")
-    except socket.timeout:
-        print("Timeout, no response. Retrying...")
-    except socket.gaierror as e:
-        print(f"Error occurred: {e}")
-
-
-def send_message(socket_your, address_port_sending):
-    # SEND MESSAGE
-    try:
-        print("\nMessage transfer started")
-        socket_your.settimeout(120)
-        print("WAITING FOR ACK :", address_port_sending)
-        while True:  # sometimes 0 from keepalive is received first so im waiting for 2 ACK
-            data, _ = socket_your.recvfrom(1500)
-            header = retrieve_header(data)
-            #print(data)
-            if header.get("header_type") == 2:  # 2 = Ack
-                break
-        if header.get("header_type") == 2:
-            print("ACK RECEIVED :", address_port_sending, "\n")
-            # sending message
-            string_to_send = input("Enter message to SEND :")
-            send_packet_data(6, socket_your, address_port_sending, 0, 0,
-                             0, 0, 0, 0, string_to_send)
-            print("Message sent : " + string_to_send, "\n")
-    except socket.timeout:
-        print("Timeout, no response. Retrying...")
-    except socket.gaierror as e:
-        print(f"Error occurred: {e}")
 
 
 # --------------------------------   FILE TRANSFER RECEIVE/SEND
@@ -215,8 +171,9 @@ def file_send(socket_your, address_port_sending, file_bool):
     global user_input
     file_name = ""
     string_to_send = ""
+    full_message = ""
     try:
-        print("\nFile\Message transfer started")
+        print("\nFile,Message transfer started")
         socket_your.settimeout(120)
         print("WAITING FOR ACK :", address_port_sending)
         while True:  # sometimes 0 from keepalive is received first so im waiting for 2 ACK
@@ -226,40 +183,51 @@ def file_send(socket_your, address_port_sending, file_bool):
             if header.get("header_type") == 2:  # 2 = Ack
                 break
         print("ACK RECEIVED :", address_port_sending, "\n")
-        # SET UP FILE , FRAGMENT
-        file_name = input("Enter file name : ")
-        path = input("Enter path where to find file C:/.../  or (yes) if in working directory: ")
+        # SET UP FILE , message input
+        if file_bool:
+            file_name = input("Enter file name : ")
+            path = input("Enter path where to find file C:/.../  or (yes) if in working directory: ")
+        else:
+            string_to_send = input("Enter message to send : ")
+        # SET UP FRAGMENT SIZE
         fragment_size = int(input("Enter fragment size : max 1458 :"))
         while 0 >= fragment_size or 1458 < fragment_size:
             fragment_size = int(input("Enter fragment size :  max 1458 :"))
-        # READ FILE
-        if path == "yes":
-            path = file_name
-        else:
-            path = path + "\\" + file_name
-        file_in = open(path, "rb")
-        file_size = os.path.getsize(path)
-        packets_number = math.ceil(file_size / fragment_size)
-        last_fragment_size = file_size % fragment_size
-        string_to_send = file_in.read()
-        print("File to send : " + file_name + "  " + str(file_size) + " B")
-        print("File path: " + path)
-        print("Fragment count: " + str(packets_number))
-        print("Fragment size: " + str(fragment_size))
-        if last_fragment_size > 0 and last_fragment_size != fragment_size:
-            print("Last fragment size: " + str(file_size % fragment_size))
-        # SEPARATE FILE INTO FRAGMENTS
+        if file_bool:
+            if path == "yes":
+                path = file_name
+            else:
+                path = path + "\\" + file_name
+            file_in = open(path, "rb")
+            file_size = os.path.getsize(path)
+            packets_number = math.ceil(file_size / fragment_size)
+            last_fragment_size = file_size % fragment_size
+            string_to_send = file_in.read()
+            print("File to send : " + file_name + "  " + str(file_size) + " B")
+            print("File path: " + path)
+            print("Fragment count: " + str(packets_number))
+            print("Fragment size: " + str(fragment_size))
+            if last_fragment_size > 0 and last_fragment_size != fragment_size:
+                print("Last fragment size: " + str(file_size % fragment_size))
+
+        # SEPARATE FILE\MESSAGE INTO FRAGMENTS
         parts = []
+        full_message = string_to_send
         while len(string_to_send) > 0:
-            string_part = string_to_send[0:fragment_size]  # file already in bytes "rb"
-            parts.append(string_part)
+            if file_bool:
+                string_part = string_to_send[0:fragment_size]  # file already in bytes "rb"
+            else:
+                string_part = string_to_send[0:fragment_size]
+                string_part = str.encode(string_part)  # message get part and encode
             string_to_send = string_to_send[fragment_size:]
-        #SEND FILE NAME FIRST
+            parts.append(string_part)
+        if file_bool:
+            #SEND FILE NAME FIRST
+            send_packet_data(6, socket_your, address_port_sending, 0, 0,
+                             0, 0, 0, 0, file_name)
+        # SEND FRAGMENT SIZE
         send_packet_data(6, socket_your, address_port_sending, 0, 0,
-                         0, 0, 0, 0, file_name)
-        #SEND FRAGMENT SIZE
-        send_packet_data(6, socket_your, address_port_sending, 0, 0,
-                         0, 0, 0, 0, str(len(parts)))
+                             0, 0, 0, 0, str(len(parts)))
         #SEND LOOP
         i = 0
         while i < len(parts):
@@ -274,35 +242,41 @@ def file_send(socket_your, address_port_sending, file_bool):
                 i += 1
             elif type_header == 7:  # NACK
                 print("PACKET - " + str(i + 1) + " NACK RECEIVED arrived wrong :", address_port_sending)
-
-        print("File sent : " + file_name, "\n")
+        if file_bool:
+            print("File sent : " + file_name, "\n")
+        else:
+            print("Message sent : " + full_message, "\n")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except socket.gaierror as e:
         print(f"Error occurred: {e}")
 
 
-def file_receive(socket_your, address_port_sending):
+def file_receive(socket_your, address_port_sending, file_bool):
     received_packets_count = 0
     full_string = []
     fragment_size = 0
     try:
-        print("\nFile  transfer started")
+        print("\nFile,Message   transfer started")
         print("Sending '2' = ACK ", "\n")
         socket_your.settimeout(120)
         send_info_packet_type_only(2, socket_your, address_port_sending)  # sent "2" = ACK
         while True:  # sometimes 0 from keepalive is received first so im waiting for 6 Data packet
             data, _ = socket_your.recvfrom(1500)
             header = retrieve_header(data)
-            if header.get("header_type") == 6:  # 6 = Data packet
+            if header.get("header_type") == 6 and data[header_size:].decode() != "":  # 6 = Data packet
                 break
-        # RECEIVE FILE NAME
-        file_name = data[header_size:]
-        decoded_file_name = file_name.decode()
-        print("First data packet arrived. Filename : ", decoded_file_name)
-        # RECEIVE FRAGMENT COUNT
-        data, _ = socket_your.recvfrom(1500)
-        fragment_count = int(data[header_size:].decode())
+        if file_bool:
+            # RECEIVE FILE NAME
+            file_name = data[header_size:]
+            decoded_file_name = file_name.decode()
+            print("First data packet arrived. Filename : ", decoded_file_name)
+            # RECEIVE FRAGMENT COUNT
+            data, _ = socket_your.recvfrom(1500)
+            fragment_count = int(data[header_size:].decode())
+        else:
+            # RECEIVE FRAGMENT COUNT ONLY IF MESSAGE SENT NOT FILE
+            fragment_count = int(data[header_size:].decode())
         # RECEIVE MAIN LOOP
         i = 0
         parts = []
@@ -317,31 +291,37 @@ def file_receive(socket_your, address_port_sending):
             if crc_check == crc:
                 print("Packet : " + str(i + 1) + "  received okay SENDING ACK")
                 i += 1
-                parts.append(data)
+                if file_bool:
+                    parts.append(data)
+                else:
+                    parts.append(data.decode())
                 send_info_packet_type_only(2, socket_your, address_port_sending)
             else:
                 print("Packet : " + str(i + 1) + "  received wrong SENDING NACK")
                 send_info_packet_type_only(7, socket_your, address_port_sending)
-        print("File received okay. \n")
-        decoded_file_name = "1" + decoded_file_name
-        file_path = input("Enter path where to save C:/.../  or (yes) to receive in working directory: ")
-        if file_path == "yes":
-            path = decoded_file_name
+        print("File,Message received okay. \n")
+        if not file_bool:
+            print("Message sent : " + "".join(parts))
         else:
-            path = file_path + "\\" + decoded_file_name
+            decoded_file_name = "1" + decoded_file_name
+            file_path = input("Enter path where to save C:/.../  or (yes) to receive in working directory: ")
+            if file_path == "yes":
+                path = decoded_file_name
+            else:
+                path = file_path + "\\" + decoded_file_name
 
-        with open(path, 'wb') as file_write:
-            for part in parts:
-                file_write.write(part)
-        file_size = os.path.getsize(path)
-        last_fragment_size = file_size % fragment_size
-        print("File to send : " + decoded_file_name + "  " + str(file_size) + " B")
-        print("File path: " + path)
-        print("Fragment count: " + str(fragment_count))
-        print("Fragment size: " + str(fragment_size))
-        if last_fragment_size > 0 and last_fragment_size != fragment_size:
-            print("Last fragment size: " + str(file_size % fragment_size))
-        print(f"File saved {path}")
+            with open(path, 'wb') as file_write:
+                for part in parts:
+                    file_write.write(part)
+            file_size = os.path.getsize(path)
+            last_fragment_size = file_size % fragment_size
+            print("File to send : " + decoded_file_name + "  " + str(file_size) + " B")
+            print("File path: " + path)
+            print("Fragment count: " + str(fragment_count))
+            print("Fragment size: " + str(fragment_size))
+            if last_fragment_size > 0 and last_fragment_size != fragment_size:
+                print("Last fragment size: " + str(file_size % fragment_size))
+            print(f"File saved {path}")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except socket.gaierror as e:
@@ -393,23 +373,17 @@ def main_loop(socket_your, address_port_sending):  # main loop
             print("Exit initiated. ")
             end_threads(user_inp_thread, keep_ali_thread)
             break
-        if transfer:  # When transfer is initiated
-            print("Message Transfer initiated. ")
+        if transfer_file or transfer:
+            print("File, Message Transfer initiated. ")
+            if transfer_file:
+                file_bool = True
+            else:
+                file_bool = False
             end_threads(user_inp_thread, keep_ali_thread)
             if sender:
-                send_message(socket_your, address_port_sending)
+                file_send(socket_your, address_port_sending, file_bool)
             else:
-                receive_message(socket_your, address_port_sending)
-            print("\nMessage transfer stopped")
-            reset_global_variables()  # Start again threads
-            keep_ali_thread, user_inp_thread = start_threads(socket_your, address_port_sending)
-        if transfer_file:
-            print("File Transfer initiated. ")
-            end_threads(user_inp_thread, keep_ali_thread)
-            if sender:
-                file_send(socket_your, address_port_sending)
-            else:
-                file_receive(socket_your, address_port_sending)
+                file_receive(socket_your, address_port_sending, file_bool)
             print("\nFile transfer stopped")
             reset_global_variables()  # Start again threads
             keep_ali_thread, user_inp_thread = start_threads(socket_your, address_port_sending)
