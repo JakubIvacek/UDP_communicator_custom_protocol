@@ -167,7 +167,7 @@ def peer_to_peer_start():  # P2P start
 
 
 # --------------------------------   FILE TRANSFER RECEIVE/SEND
-def file_send(socket_your, address_port_sending, file_bool):
+def data_send(socket_your, address_port_sending, file_bool):
     global user_input
     file_name = ""
     string_to_send = ""
@@ -252,7 +252,7 @@ def file_send(socket_your, address_port_sending, file_bool):
         print(f"Error occurred: {e}")
 
 
-def file_receive(socket_your, address_port_sending, file_bool):
+def data_receive(socket_your, address_port_sending, file_bool):
     received_packets_count = 0
     full_string = []
     fragment_size = 0
@@ -331,12 +331,14 @@ def file_receive(socket_your, address_port_sending, file_bool):
 # --------------------------------   KEEPALIVE THREAD
 def keep_alive_thread(socket_your, address_port_sending):
     global keep_alive_running, on, switch, transfer, transfer_file
+    count_no_signal = 0
     while keep_alive_running:
         socket_your.settimeout(60)
         try:
             send_info_packet_type_only(0, socket_your, address_port_sending)  # sent 0 = SYN
             data, _ = socket_your.recvfrom(1500)
             type_header = retrieve_header(data).get("header_type")
+            count_no_signal = 0
             # received 0 = SYN
             if type_header == 0:
                 print("KeepAlive from :", address_port_sending)
@@ -353,12 +355,16 @@ def keep_alive_thread(socket_your, address_port_sending):
                 transfer_file = True
                 print("Sending file comm from :", address_port_sending)
                 break
-
+        except ConnectionResetError:
+            count_no_signal += 1
+            print(f"No connection by {address_port_sending}.")
         except socket.timeout:
             print("Timeout, no response KA. Retrying...")
         except socket.gaierror as e:
             print(f"Error occurred KA: {e}")
-
+        if count_no_signal == 3:
+            print("Exit 3 times no respond on KeepAlive.")
+            on = False
         time.sleep(5)
 
 
@@ -375,15 +381,12 @@ def main_loop(socket_your, address_port_sending):  # main loop
             break
         if transfer_file or transfer:
             print("File, Message Transfer initiated. ")
-            if transfer_file:
-                file_bool = True
-            else:
-                file_bool = False
+            file_bool = transfer_file
             end_threads(user_inp_thread, keep_ali_thread)
             if sender:
-                file_send(socket_your, address_port_sending, file_bool)
+                data_send(socket_your, address_port_sending, file_bool)
             else:
-                file_receive(socket_your, address_port_sending, file_bool)
+                data_receive(socket_your, address_port_sending, file_bool)
             print("\nFile transfer stopped")
             reset_global_variables()  # Start again threads
             keep_ali_thread, user_inp_thread = start_threads(socket_your, address_port_sending)
