@@ -5,7 +5,6 @@ import socket
 import struct
 import threading
 import time
-import base64
 import struct
 
 # --------------------------------   GLOBAL VARIABLES
@@ -19,6 +18,8 @@ file = False
 transfer_file = False
 sender = False
 header_format = "BHHHHHH"
+header_size = 14  # header format 13 + 1 padding
+
 
 def reset_global_variables():  # RESET GLOBAL VARIABLES
     global keep_alive_running, user_input, on, switch, transfer, file, sender, transfer_file
@@ -31,6 +32,7 @@ def reset_global_variables():  # RESET GLOBAL VARIABLES
     sender = False
     transfer_file = False
 
+
 # --------------------------------   THREAD STUFF
 # Thread for checking user input
 def user_input_thread():
@@ -38,6 +40,7 @@ def user_input_thread():
     while keep_alive_running:
         input_user = input("Enter : M for message send, F for file Send, E for Exit\n")
         user_input = input_user
+
 
 def start_threads(socket_your, address_port):
     keep_ali_thread = threading.Thread(target=keep_alive_thread, args=(socket_your, address_port))
@@ -48,6 +51,7 @@ def start_threads(socket_your, address_port):
     user_inp_thread.start()
     return keep_ali_thread, user_inp_thread
 
+
 def end_threads(user_inp_thread, keep_ali_thread):
     global keep_alive_running
     print("-- ENTER ANYTHING TO CONTINUE --")
@@ -55,16 +59,18 @@ def end_threads(user_inp_thread, keep_ali_thread):
     keep_ali_thread.join()
     user_inp_thread.join()
 
+
 # --------------------------------   HEADER CREATE/RETRIEVE
-def create_header(head_type,sequence_number, acknowledgment_number, fragment_offset, window_size, data_length, crc):
+def create_header(head_type, sequence_number, acknowledgment_number, fragment_offset, window_size, data_length, crc):
     global header_format
-    header = struct.pack( header_format,head_type, sequence_number,acknowledgment_number,
-                          fragment_offset, window_size,data_length, crc)
+    header = struct.pack(header_format, head_type, sequence_number, acknowledgment_number,
+                         fragment_offset, window_size, data_length, crc)
     return header
+
 
 def retrieve_header(packet):
     global header_format
-    header = packet[:14]
+    header = packet[:header_size]
     # Unpack the header to retrieve the values
     unpacked_data = struct.unpack(header_format, header)
     (header_type, sequence_number, acknowledgment_number, fragment_offset,
@@ -78,18 +84,18 @@ def retrieve_header(packet):
         'data_length': data_length,
         'crc': crc,
     }
-#------------------------------------ CRC16 functions
 
 
 # --------------------------------   SENT PACKAGE STUFF
 def send_packet_data(type_header, socket_your, address_port_sending, sequence_number, acknowledgment_number,
-                     fragment_offset, window_size, data_length, crc , data):
+                     fragment_offset, window_size, data_length, crc, data):
     global header_format
-    header = struct.pack(header_format, type_header, sequence_number, acknowledgment_number, fragment_offset, window_size, data_length, crc)
+    header = struct.pack(header_format, type_header, sequence_number, acknowledgment_number, fragment_offset,
+                         window_size, data_length, crc)
     if isinstance(data, bytes):
         encoded_data = data
     else:
-        encoded_data = base64.b16encode(data.encode('utf-8')) # Convert string to bytes
+        encoded_data = data.encode()  # Convert string to bytes
 
     # Send the header and data together
     socket_your.sendto(header + encoded_data, address_port_sending)
@@ -99,6 +105,7 @@ def send_info_packet_type_only(type_header, socket_your, address_port_sending):
     global header_format
     header = struct.pack(header_format, type_header, 0, 0, 0, 0, 0, 0)
     socket_your.sendto(header, address_port_sending)  # send type info message
+
 
 # --------------------------------   P2P COMMUNICATION START
 def peer_to_peer_start():  # P2P start
@@ -119,9 +126,9 @@ def peer_to_peer_start():  # P2P start
             if start_connection == "y":
                 # INITIATE CONNECTION 3-WAY-HANDSHAKE
                 # "0" = SYN  "1" = SYN-ACK   "2" = ACK
-                send_info_packet_type_only(0, socket_your, address_port_sending) # sent "0" = SYN
+                send_info_packet_type_only(0, socket_your, address_port_sending)  # sent "0" = SYN
                 print("SYN SENT :", address_port_sending)
-                data, _ = socket_your.recvfrom(1500) # check if "1" = SYN-ACK received
+                data, _ = socket_your.recvfrom(1500)  # check if "1" = SYN-ACK received
                 type_header = retrieve_header(data).get("header_type")
                 if type_header == 1:
                     print("SYN-ACK RECEIVED :", address_port_sending)
@@ -134,11 +141,11 @@ def peer_to_peer_start():  # P2P start
             elif start_connection == "n":
                 # WAITING FOR CONNECTION 3-WAY-HANDSHAKE
                 # "0" = SYN  "1" = SYN-ACK   "2" = ACK
-                data, _ = socket_your.recvfrom(1500) # check if "0" = SYN
+                data, _ = socket_your.recvfrom(1500)  # check if "0" = SYN
                 type_header = retrieve_header(data).get("header_type")
                 if type_header == 0:
                     print("SYN RECEIVED :", address_port_sending)
-                    send_info_packet_type_only(1, socket_your, address_port_sending) #sent "1" = SYN-ACK
+                    send_info_packet_type_only(1, socket_your, address_port_sending)  #sent "1" = SYN-ACK
                     print("SYN-ACK SENT :", address_port_sending)
                     data, _ = socket_your.recvfrom(1500)  # check if "2" = ACK received
                     type_header = retrieve_header(data).get("header_type")
@@ -156,6 +163,7 @@ def peer_to_peer_start():  # P2P start
             print(f"Error occurred: {e}")
     main_loop(socket_your, address_port_sending)
 
+
 # --------------------------------   MESSAGE TRANSFER RECEIVE/SEND
 def receive_message(socket_your, address_port_sending):
     # Receive message
@@ -164,17 +172,18 @@ def receive_message(socket_your, address_port_sending):
         print("Sending '2' = ACK ", "\n")
         socket_your.settimeout(60)
         send_info_packet_type_only(2, socket_your, address_port_sending)  # sent "2" = ACK
-        while True: # sometimes 0 from keepalive is received first so im waiting for 6 Data packet
+        while True:  # sometimes 0 from keepalive is received first so im waiting for 6 Data packet
             data, _ = socket_your.recvfrom(1500)
             header = retrieve_header(data)
-            if header.get("header_type") == 6: # 6 = Data packet
+            if header.get("header_type") == 6:  # 6 = Data packet
                 break
-        only_data = data[14:]
-        print("Message received :", base64.b16decode(only_data).decode('utf-8'), "\n")
+        only_data = data[header_size:]
+        print("Message received :", only_data.decode(), "\n")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except socket.gaierror as e:
         print(f"Error occurred: {e}")
+
 
 def send_message(socket_your, address_port_sending):
     # SEND MESSAGE
@@ -182,7 +191,7 @@ def send_message(socket_your, address_port_sending):
         print("\nMessage transfer started")
         socket_your.settimeout(120)
         print("WAITING FOR ACK :", address_port_sending)
-        while True: # sometimes 0 from keepalive is received first so im waiting for 2 ACK
+        while True:  # sometimes 0 from keepalive is received first so im waiting for 2 ACK
             data, _ = socket_your.recvfrom(1500)
             header = retrieve_header(data)
             #print(data)
@@ -200,16 +209,17 @@ def send_message(socket_your, address_port_sending):
     except socket.gaierror as e:
         print(f"Error occurred: {e}")
 
+
 # --------------------------------   FILE TRANSFER RECEIVE/SEND
-def file_send(socket_your, address_port_sending):
+def file_send(socket_your, address_port_sending, file_bool):
     global user_input
     file_name = ""
     string_to_send = ""
     try:
-        print("\nFile transfer started")
+        print("\nFile\Message transfer started")
         socket_your.settimeout(120)
         print("WAITING FOR ACK :", address_port_sending)
-        while True: # sometimes 0 from keepalive is received first so im waiting for 2 ACK
+        while True:  # sometimes 0 from keepalive is received first so im waiting for 2 ACK
             data, _ = socket_your.recvfrom(1500)
             header = retrieve_header(data)
             #print(data)
@@ -218,15 +228,26 @@ def file_send(socket_your, address_port_sending):
         print("ACK RECEIVED :", address_port_sending, "\n")
         # SET UP FILE , FRAGMENT
         file_name = input("Enter file name : ")
-        fragment_size = int(input("Enter fragment size : max 1459 :"))
-        while 0 >= fragment_size or 1459 < fragment_size:
-            fragment_size = int(input("Enter fragment size :  max 1459 :"))
+        path = input("Enter path where to find file C:/.../  or (yes) if in working directory: ")
+        fragment_size = int(input("Enter fragment size : max 1458 :"))
+        while 0 >= fragment_size or 1458 < fragment_size:
+            fragment_size = int(input("Enter fragment size :  max 1458 :"))
         # READ FILE
-        file_in = open(file_name, "rb")
-        file_size = os.path.getsize(file_name)
-        print("File to send : " + file_name + "  " + str(file_size) + " B")
+        if path == "yes":
+            path = file_name
+        else:
+            path = path + "\\" + file_name
+        file_in = open(path, "rb")
+        file_size = os.path.getsize(path)
         packets_number = math.ceil(file_size / fragment_size)
+        last_fragment_size = file_size % fragment_size
         string_to_send = file_in.read()
+        print("File to send : " + file_name + "  " + str(file_size) + " B")
+        print("File path: " + path)
+        print("Fragment count: " + str(packets_number))
+        print("Fragment size: " + str(fragment_size))
+        if last_fragment_size > 0 and last_fragment_size != fragment_size:
+            print("Last fragment size: " + str(file_size % fragment_size))
         # SEPARATE FILE INTO FRAGMENTS
         parts = []
         while len(string_to_send) > 0:
@@ -241,21 +262,18 @@ def file_send(socket_your, address_port_sending):
                          0, 0, 0, 0, str(len(parts)))
         #SEND LOOP
         i = 0
-        ack_num = 0
         while i < len(parts):
             string_part = parts[i]
             crc = binascii.crc_hqx(string_part, 0)
-            send_packet_data(6, socket_your, address_port_sending, i, ack_num,
+            send_packet_data(6, socket_your, address_port_sending, i, 0,
                              i, 0, 0, crc, string_part)
             packet, _ = socket_your.recvfrom(1500)
             type_header = retrieve_header(packet).get("header_type")
-            if type_header == 2: # ACK
-                print("PACKET - "+ str(i + 1) + " ACK RECEIVED arrived ok :", address_port_sending, "\n")
+            if type_header == 2:  # ACK
+                print("PACKET - " + str(i + 1) + " ACK RECEIVED arrived ok :", address_port_sending)
                 i += 1
-            elif type_header == 7: # NACK
-                print("PACKET - " + str(i + 1) + " NACK RECEIVED arrived wrong :", address_port_sending, "\n")
-
-
+            elif type_header == 7:  # NACK
+                print("PACKET - " + str(i + 1) + " NACK RECEIVED arrived wrong :", address_port_sending)
 
         print("File sent : " + file_name, "\n")
     except socket.timeout:
@@ -271,21 +289,20 @@ def file_receive(socket_your, address_port_sending):
     try:
         print("\nFile  transfer started")
         print("Sending '2' = ACK ", "\n")
-        socket_your.settimeout(60)
+        socket_your.settimeout(120)
         send_info_packet_type_only(2, socket_your, address_port_sending)  # sent "2" = ACK
-        while True: # sometimes 0 from keepalive is received first so im waiting for 6 Data packet
+        while True:  # sometimes 0 from keepalive is received first so im waiting for 6 Data packet
             data, _ = socket_your.recvfrom(1500)
             header = retrieve_header(data)
-            if header.get("header_type") == 6: # 6 = Data packet
+            if header.get("header_type") == 6:  # 6 = Data packet
                 break
         # RECEIVE FILE NAME
-        file_name = data[14:]
-        decoded_file_name = base64.b16decode(file_name).decode('utf-8')
+        file_name = data[header_size:]
+        decoded_file_name = file_name.decode()
         print("First data packet arrived. Filename : ", decoded_file_name)
         # RECEIVE FRAGMENT COUNT
         data, _ = socket_your.recvfrom(1500)
-        fragment_count = int(base64.b16decode(data[14:]).decode('utf-8'))
-        print("Fragments count : ", fragment_count, "\n")
+        fragment_count = int(data[header_size:].decode())
         # RECEIVE MAIN LOOP
         i = 0
         parts = []
@@ -293,7 +310,7 @@ def file_receive(socket_your, address_port_sending):
             packet, _ = socket_your.recvfrom(1500)
             header = retrieve_header(packet)
             crc = header.get("crc")
-            data = packet[14:]
+            data = packet[header_size:]
             if fragment_size == 0:
                 fragment_size = len(data)
             crc_check = binascii.crc_hqx(data, 0)
@@ -307,14 +324,29 @@ def file_receive(socket_your, address_port_sending):
                 send_info_packet_type_only(7, socket_your, address_port_sending)
         print("File received okay. \n")
         decoded_file_name = "1" + decoded_file_name
-        with open(decoded_file_name, 'wb') as file_write:
+        file_path = input("Enter path where to save C:/.../  or (yes) to receive in working directory: ")
+        if file_path == "yes":
+            path = decoded_file_name
+        else:
+            path = file_path + "\\" + decoded_file_name
+
+        with open(path, 'wb') as file_write:
             for part in parts:
                 file_write.write(part)
-        print(f"File saved as {decoded_file_name}")
+        file_size = os.path.getsize(path)
+        last_fragment_size = file_size % fragment_size
+        print("File to send : " + decoded_file_name + "  " + str(file_size) + " B")
+        print("File path: " + path)
+        print("Fragment count: " + str(fragment_count))
+        print("Fragment size: " + str(fragment_size))
+        if last_fragment_size > 0 and last_fragment_size != fragment_size:
+            print("Last fragment size: " + str(file_size % fragment_size))
+        print(f"File saved {path}")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except socket.gaierror as e:
         print(f"Error occurred: {e}")
+
 
 # --------------------------------   KEEPALIVE THREAD
 def keep_alive_thread(socket_your, address_port_sending):
@@ -322,18 +354,18 @@ def keep_alive_thread(socket_your, address_port_sending):
     while keep_alive_running:
         socket_your.settimeout(60)
         try:
-            send_info_packet_type_only(0, socket_your, address_port_sending) # sent 0 = SYN
+            send_info_packet_type_only(0, socket_your, address_port_sending)  # sent 0 = SYN
             data, _ = socket_your.recvfrom(1500)
             type_header = retrieve_header(data).get("header_type")
             # received 0 = SYN
             if type_header == 0:
                 print("KeepAlive from :", address_port_sending)
             # SOMETHING ELSE RECEIVED
-            elif type_header == 3:# received 3 = Sending message
+            elif type_header == 3:  # received 3 = Sending message
                 transfer = True
                 print("Sending message comm from :", address_port_sending)
                 break
-            elif type_header == 4:# received 4 = Exit
+            elif type_header == 4:  # received 4 = Exit
                 print("Exit received from :", address_port_sending)
                 on = False
                 break
@@ -347,8 +379,8 @@ def keep_alive_thread(socket_your, address_port_sending):
         except socket.gaierror as e:
             print(f"Error occurred KA: {e}")
 
-
         time.sleep(5)
+
 
 # --------------------------------   MAIN LOOP
 def main_loop(socket_your, address_port_sending):  # main loop
@@ -361,7 +393,7 @@ def main_loop(socket_your, address_port_sending):  # main loop
             print("Exit initiated. ")
             end_threads(user_inp_thread, keep_ali_thread)
             break
-        if transfer:     # When transfer is initiated
+        if transfer:  # When transfer is initiated
             print("Message Transfer initiated. ")
             end_threads(user_inp_thread, keep_ali_thread)
             if sender:
@@ -369,7 +401,7 @@ def main_loop(socket_your, address_port_sending):  # main loop
             else:
                 receive_message(socket_your, address_port_sending)
             print("\nMessage transfer stopped")
-            reset_global_variables() # Start again threads
+            reset_global_variables()  # Start again threads
             keep_ali_thread, user_inp_thread = start_threads(socket_your, address_port_sending)
         if transfer_file:
             print("File Transfer initiated. ")
@@ -401,6 +433,7 @@ def main_loop(socket_your, address_port_sending):  # main loop
         old_input = user_input
         time.sleep(1)
     socket_your.close()
+
 
 # MAIN LOOP
 def main():
