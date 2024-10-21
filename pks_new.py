@@ -392,21 +392,20 @@ def main_loop(socket_your, address_port_sending):  # main loop
             keep_ali_thread, user_inp_thread = start_threads(socket_your, address_port_sending)
         user_input = user_input.lower()
         if old_input != user_input:
-            match user_input:
-                case "e":
-                    on = False
-                    # sent "4" = exit to let other side know
-                    send_info_packet_type_only(4, socket_your, address_port_sending)
-                case "m":
-                    sender = True
-                    transfer = True
-                    # sent "3" = message transfer to let other side know
-                    send_info_packet_type_only(3, socket_your, address_port_sending)
-                case "f":
-                    sender = True
-                    transfer_file = True
-                    # sent "5" = message transfer to let other side know
-                    send_info_packet_type_only(5, socket_your, address_port_sending)
+            if user_input == "e":
+                on = False
+                # sent "4" = exit to let other side know
+                send_info_packet_type_only(4, socket_your, address_port_sending)
+            elif user_input == "m":
+                sender = True
+                transfer = True
+                # sent "3" = message transfer to let other side know
+                send_info_packet_type_only(3, socket_your, address_port_sending)
+            elif user_input == "f":
+                sender = True
+                transfer_file = True
+                # sent "5" = message transfer to let other side know
+                send_info_packet_type_only(5, socket_your, address_port_sending)
         old_input = user_input
         time.sleep(1)
     socket_your.close()
@@ -414,19 +413,18 @@ def main_loop(socket_your, address_port_sending):  # main loop
 
 # MAIN LOOP
 def main():
-    while True:
+    running = True
+    while running:
         reset_global_variables()
         # CHECK USER INPUT
         user_input = input("Input : P for  PEER to PEER communication \n E for Exit \n")
         user_input = user_input.lower()
-        match user_input:
-            case "p":
-                peer_to_peer_start()
-            case "e":
-                break
-            case _:
-                print("Wrong user input")
-
+        if user_input == "p":
+            peer_to_peer_start()
+        elif user_input == "e":
+            running = False
+        else:
+            print("Wrong user input")
 
 if __name__ == "__main__":
     main()
