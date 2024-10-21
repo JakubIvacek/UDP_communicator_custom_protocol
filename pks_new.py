@@ -186,6 +186,7 @@ def data_send(socket_your, address_port_sending, file_bool):
         fragment_size = int(input("Enter fragment size : max 1458 :"))
         while 0 >= fragment_size or 1458 < fragment_size:
             fragment_size = int(input("Enter fragment size :  max 1458 :"))
+        mistake = input("Enter 1 if u want bad packet receive : ")
         if file_bool:
             if path == "yes":
                 path = file_name
@@ -202,7 +203,16 @@ def data_send(socket_your, address_port_sending, file_bool):
             print("Fragment size: " + str(fragment_size))
             if last_fragment_size > 0 and last_fragment_size != fragment_size:
                 print("Last fragment size: " + str(file_size % fragment_size))
-
+        else:
+            string_size = len(string_to_send)
+            packets_number = math.ceil(string_size / fragment_size)
+            last_fragment_size = string_size % fragment_size
+            print("String to send : " + string_to_send)
+            print("String size : " + str(string_size) + " B")
+            print("Fragment count : " + str(packets_number))
+            print("Fragment size: " + str(fragment_size))
+            if last_fragment_size > 0 and last_fragment_size != fragment_size:
+                print("Last fragment size: " + str(last_fragment_size))
         # SEPARATE FILE\MESSAGE INTO FRAGMENTS
         parts = []
         full_message = string_to_send
@@ -223,9 +233,13 @@ def data_send(socket_your, address_port_sending, file_bool):
                              0, 0, 0, 0, str(len(parts)))
         #SEND LOOP
         i = 0
+        error = 0
         while i < len(parts):
             string_part = parts[i]
             crc = binascii.crc_hqx(string_part, 0)
+            if mistake == "1" and error == 0:
+                crc += 1
+                error += 1
             send_packet_data(6, socket_your, address_port_sending, i, 0,
                              i, 0, 0, crc, string_part)
             packet, _ = socket_your.recvfrom(1500)
@@ -261,6 +275,7 @@ def data_receive(socket_your, address_port_sending, file_bool):
             header = retrieve_header(data)
             if header.get("header_type") == 6 and data[header_size:].decode() != "":  # 6 = Data packet
                 break
+        start_time = time.time()
         if file_bool:
             # RECEIVE FILE NAME
             file_name = data[header_size:]
@@ -284,7 +299,7 @@ def data_receive(socket_your, address_port_sending, file_bool):
                 fragment_size = len(data)
             crc_check = binascii.crc_hqx(data, 0)
             if crc_check == crc:
-                print("Packet : " + str(i + 1) + "  received okay SENDING ACK")
+                print("Packet : " + str(i + 1) + "  received okay SENDING ACK:", address_port_sending)
                 i += 1
                 if file_bool:
                     parts.append(data)
@@ -292,11 +307,16 @@ def data_receive(socket_your, address_port_sending, file_bool):
                     parts.append(data.decode())
                 send_info_packet_type_only(2, socket_your, address_port_sending)
             else:
-                print("Packet : " + str(i + 1) + "  received wrong SENDING NACK")
+                print("Packet : " + str(i + 1) + "  received wrong SENDING NACK:", address_port_sending)
                 send_info_packet_type_only(7, socket_your, address_port_sending)
         print("File,Message received okay. \n")
+        end_time = time.time()
+        transfer_time = end_time - start_time
         if not file_bool:
-            print("Message sent : " + "".join(parts))
+            message = "".join(parts)
+            message_size = len(message.encode('utf-8'))
+            print("Message received alright : " + message)
+            print("Message size: " + str(message_size) + " B")
         else:
             decoded_file_name = "1" + decoded_file_name
             file_path = input("Enter path where to save C:/.../  or (yes) to receive in working directory: ")
@@ -316,7 +336,8 @@ def data_receive(socket_your, address_port_sending, file_bool):
             print("Fragment size: " + str(fragment_size))
             if last_fragment_size > 0 and last_fragment_size != fragment_size:
                 print("Last fragment size: " + str(file_size % fragment_size))
-            print(f"File saved {path}")
+            print(f"File received: saved {path}")
+        print(f"Data transfer completed in {transfer_time:.3f} seconds")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except ConnectionResetError:
