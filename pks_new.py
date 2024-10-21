@@ -111,56 +111,49 @@ def send_info_packet_type_only(type_header, socket_your, address_port_sending):
 def peer_to_peer_start():  # P2P start
     print("peerToPeer Start")
     connected = False
+    # SET USER INPUT
+    port_your = input("Input port you are listening on: ")
+    address_sending = input("Input ip you are sending to: ")
+    port_sending = input("Input port you are sending to: ")
+    # start_connection = input("Want to Start connection? (Y/N): ").strip().lower()
+    # SET UP SOCKET
+    socket_your = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    socket_your.bind(("", int(port_your)))
+    socket_your.settimeout(120)
+    address_port_sending = (address_sending, int(port_sending))
     while not connected:
         try:
-            #SET USER INPUT
-            port_your = input("Input port you are listening on: ")
-            address_sending = input("Input ip you are sending to: ")
-            port_sending = input("Input port you are sending to: ")
-            start_connection = input("Want to Start connection? (Y/N): ").strip().lower()
-            #SET UP SOCKET
-            socket_your = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            socket_your.bind(("", int(port_your)))
-            socket_your.settimeout(120)
-            address_port_sending = (address_sending, int(port_sending))
-            if start_connection == "y":
-                # INITIATE CONNECTION 3-WAY-HANDSHAKE
-                # "0" = SYN  "1" = SYN-ACK   "2" = ACK
-                send_info_packet_type_only(0, socket_your, address_port_sending)  # sent "0" = SYN
-                print("SYN SENT :", address_port_sending)
+            # CONNECTION 3-WAY-HANDSHAKE
+            # "0" = SYN  "1" = SYN-ACK   "2" = ACK
+            send_info_packet_type_only(0, socket_your, address_port_sending)  # sent "0" = SYN
+            #print("SYN SENT :", address_port_sending)
+            data, _ = socket_your.recvfrom(1500)  # check if "1" = SYN-ACK received
+            type_header = retrieve_header(data).get("header_type")
+            if type_header == 0:
+                print("SYN RECEIVED :", address_port_sending)
+                send_info_packet_type_only(1, socket_your, address_port_sending)  # sent "1" = SYN-ACK
+                #print("SYN-ACK SENT :", address_port_sending)
                 data, _ = socket_your.recvfrom(1500)  # check if "1" = SYN-ACK received
                 type_header = retrieve_header(data).get("header_type")
                 if type_header == 1:
                     print("SYN-ACK RECEIVED :", address_port_sending)
-                    send_info_packet_type_only(2, socket_your, address_port_sending)  # Sent "2" = ACK
-                    print("ACK SENT :", address_port_sending)
-                    connected = True
-                    print("CONNECTED .  \n")
-                else:
-                    print("Not connected try again SYN-ACK not received")
-            elif start_connection == "n":
-                # WAITING FOR CONNECTION 3-WAY-HANDSHAKE
-                # "0" = SYN  "1" = SYN-ACK   "2" = ACK
-                data, _ = socket_your.recvfrom(1500)  # check if "0" = SYN
-                type_header = retrieve_header(data).get("header_type")
-                if type_header == 0:
-                    print("SYN RECEIVED :", address_port_sending)
-                    send_info_packet_type_only(1, socket_your, address_port_sending)  #sent "1" = SYN-ACK
-                    print("SYN-ACK SENT :", address_port_sending)
-                    data, _ = socket_your.recvfrom(1500)  # check if "2" = ACK received
+                    send_info_packet_type_only(2, socket_your, address_port_sending)  # sent "2" = ACK
+                    data, _ = socket_your.recvfrom(1500)  # check if "2" = SYN-ACK received
                     type_header = retrieve_header(data).get("header_type")
                     if type_header == 2:
                         print("ACK RECEIVED :", address_port_sending)
                         connected = True
-                        print("CONNECTED . \n")
                     else:
-                        print("Not connected try again ACK not received")
-                else:
-                    print("Not connected try again SYN-ACK not received")
+                        print("NO ACK RECEIVED ")
+        except ConnectionResetError:
+            print(f"No connection on {address_port_sending}.")
         except socket.timeout:
             print("Timeout, no response. Retrying...")
         except socket.gaierror as e:
             print(f"Error occurred: {e}")
+        if not connected:
+            time.sleep(5)
+    print("Connected")
     main_loop(socket_your, address_port_sending)
 
 
@@ -248,6 +241,8 @@ def data_send(socket_your, address_port_sending, file_bool):
             print("Message sent : " + full_message, "\n")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
+    except ConnectionResetError:
+        print(f"No connection on {address_port_sending}.")
     except socket.gaierror as e:
         print(f"Error occurred: {e}")
 
@@ -324,6 +319,8 @@ def data_receive(socket_your, address_port_sending, file_bool):
             print(f"File saved {path}")
     except socket.timeout:
         print("Timeout, no response. Retrying...")
+    except ConnectionResetError:
+        print(f"No connection on {address_port_sending}.")
     except socket.gaierror as e:
         print(f"Error occurred: {e}")
 
