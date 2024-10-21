@@ -200,7 +200,10 @@ def data_send(socket_your, address_port_sending, file_bool):
             print("File to send : " + file_name + "  " + str(file_size) + " B")
             print("File path: " + path)
             print("Fragment count: " + str(packets_number))
-            print("Fragment size: " + str(fragment_size))
+            if file_size < fragment_size:
+                print("Fragment size: " + str(file_size))
+            else:
+                print("Fragment size: " + str(fragment_size))
             if last_fragment_size > 0 and last_fragment_size != fragment_size:
                 print("Last fragment size: " + str(file_size % fragment_size))
         else:
@@ -209,8 +212,11 @@ def data_send(socket_your, address_port_sending, file_bool):
             last_fragment_size = string_size % fragment_size
             print("String to send : " + string_to_send)
             print("String size : " + str(string_size) + " B")
+            if string_size < fragment_size:
+                print("Fragment size: " + str(string_size))
+            else:
+                print("Fragment size: " + str(fragment_size))
             print("Fragment count : " + str(packets_number))
-            print("Fragment size: " + str(fragment_size))
             if last_fragment_size > 0 and last_fragment_size != fragment_size:
                 print("Last fragment size: " + str(last_fragment_size))
         # SEPARATE FILE\MESSAGE INTO FRAGMENTS
@@ -333,7 +339,10 @@ def data_receive(socket_your, address_port_sending, file_bool):
             print("File to send : " + decoded_file_name + "  " + str(file_size) + " B")
             print("File path: " + path)
             print("Fragment count: " + str(fragment_count))
-            print("Fragment size: " + str(fragment_size))
+            if file_size < fragment_size:
+                print("Fragment size: " + str(file_size))
+            else:
+                print("Fragment size: " + str(fragment_size))
             if last_fragment_size > 0 and last_fragment_size != fragment_size:
                 print("Last fragment size: " + str(file_size % fragment_size))
             print(f"File received: saved {path}")
