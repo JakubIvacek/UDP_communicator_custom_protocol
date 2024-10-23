@@ -159,7 +159,7 @@ def peer_to_peer_start():  # P2P start
 
 
 
-# --------------------------------   FILE TRANSFER RECEIVE/SEND
+# --------------------------------   DATA TRANSFER RECEIVE/SEND
 def data_send(socket_your, address_port_sending, file_bool):
     global user_input
     file_name = ""
@@ -238,23 +238,61 @@ def data_send(socket_your, address_port_sending, file_bool):
         send_packet_data(6, socket_your, address_port_sending, 0, 0,
                              0, 0, 0, 0, str(len(parts)))
         #SEND LOOP
+        # sq_num = (sq_num + 1) % window_size
+        # ack_num = (last_correct_sq_num + 1) % window_size
+        # data_length = len(string_part)
+        # fragment offset mozem vyhodit useless
+        # loop(poslem aby bolo count = window_size alebo kym vsetky sa neposlu)
+        # ked mi pride ack tak poslem dalsie ak nack poslem vsetky vo window
+        # este si musim pamatat window_start , window_end ? asi len start staci ked viem size
         i = 0
         error = 0
-        while i < len(parts):
+        window_size = 7
+        sq_num = 0
+        window_start = 0
+        window_end = min(window_size - 1, len(parts) - 1)
+        while i < min(window_size, len(parts)): # sent first n-(window size) packets
             string_part = parts[i]
             crc = binascii.crc_hqx(string_part, 0)
-            if mistake == "1" and error == 0:
-                crc += 1
-                error += 1
             send_packet_data(6, socket_your, address_port_sending, i, 0,
-                             i, 0, 0, crc, string_part)
+                             0, window_size, len(string_part), crc, string_part)
+            #print(f"PACKET {i + 1} - send first whole window:", address_port_sending)
+            i += 1
+        ack_count = 0
+        while ack_count < len(parts):
             packet, _ = socket_your.recvfrom(1500)
-            type_header = retrieve_header(packet).get("header_type")
-            if type_header == 2:  # ACK
-                print("PACKET - " + str(i + 1) + " ACK RECEIVED arrived ok :", address_port_sending)
-                i += 1
-            elif type_header == 7:  # NACK
-                print("PACKET - " + str(i + 1) + " NACK RECEIVED arrived wrong :", address_port_sending)
+            header = retrieve_header(packet)
+            type_header = header.get("header_type")
+            ack_num = header.get("acknowledgment_number")
+            ack_correct = False
+            #check if slide window
+            if type_header == 2 and ack_count == ack_num:  # Only slide if ACK is for the start of the window
+                window_start += 1
+                window_end += min(window_end + 1, fragment_size - 1)
+                print(f"PACKET {ack_num + 1} - ACK RECEIVED, arrived correct:", address_port_sending)
+                ack_count += 1
+                ack_correct = True
+                # Send next unsent packet if any remain
+                if i < len(parts):  # Check if there's a new packet to send
+                    string_part = parts[i]
+                    crc = binascii.crc_hqx(string_part, 0)
+                    if mistake == "1" and error == 0:
+                        crc += 1
+                        error += 1
+                    send_packet_data(6, socket_your, address_port_sending, i, 0,
+                                     0, window_size, len(string_part), crc, string_part)
+                    #print(f"PACKET {i + 1} - SENT after sliding window:", address_port_sending)
+                    i += 1
+            elif type_header == 7:  # NACK received or ACK
+                print(f"PACKET {ack_num + 1} - NACK RECEIVED, arrived wrong:", address_port_sending)
+
+                # Resend all packets in the current window
+                for seq_num in range(window_start, min(window_end + 1, len(parts))):
+                    string_part = parts[seq_num]
+                    crc = binascii.crc_hqx(string_part, 0)
+                    send_packet_data(6, socket_your, address_port_sending, seq_num, 0,
+                                     0, window_size, len(string_part), crc, string_part)
+                    print(f"PACKET {seq_num + 1} - RESENT after NACK:", address_port_sending)
         if file_bool:
             print("File sent : " + file_name, "\n")
         else:
@@ -296,25 +334,41 @@ def data_receive(socket_your, address_port_sending, file_bool):
         # RECEIVE MAIN LOOP
         i = 0
         parts = []
-        while i < fragment_count:
+        received = [False] * fragment_count  # Track received packets
+        parts = [None] * fragment_count
+        window_start = 0
+        fragment_size = 0
+        seq_count = 0
+        while window_start < fragment_count:
             packet, _ = socket_your.recvfrom(1500)
             header = retrieve_header(packet)
             crc = header.get("crc")
             data = packet[header_size:]
+            seq_num = header.get("sequence_number")
+            fragment_size = header.get("data_length")
+            window_size = header.get("window_size")
             if fragment_size == 0:
                 fragment_size = len(data)
             crc_check = binascii.crc_hqx(data, 0)
             if crc_check == crc:
-                print("Packet : " + str(i + 1) + "  received okay SENDING ACK:", address_port_sending)
+                print("Packet : " + str(seq_num + 1) + "  received okay SENDING ACK:", address_port_sending)
                 i += 1
-                if file_bool:
-                    parts.append(data)
-                else:
-                    parts.append(data.decode())
-                send_info_packet_type_only(2, socket_your, address_port_sending)
+                # Store the correctly received packet in the correct position
+                if not received[seq_num]:
+                    if file_bool:
+                        parts[seq_num] = data
+                    else:
+                        parts[seq_num] = data.decode()
+
+                    received[seq_num] = True  # Mark the packet as received
+                send_packet_data(2, socket_your, address_port_sending, seq_num,
+                                 seq_num, 0, window_size, 0, 0, "")
+                while window_start < fragment_count and received[window_start]:
+                    window_start += 1  # Slide window forward
             else:
-                print("Packet : " + str(i + 1) + "  received wrong SENDING NACK:", address_port_sending)
-                send_info_packet_type_only(7, socket_your, address_port_sending)
+                print("Packet : " + str(seq_num + 1) + "  received wrong SENDING NACK:", address_port_sending)
+                send_packet_data(7, socket_your, address_port_sending, 0,
+                                 seq_num, 0, window_size, 0, 0, "")
         print("File,Message received okay. \n")
         end_time = time.time()
         transfer_time = end_time - start_time
