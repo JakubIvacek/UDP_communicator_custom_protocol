@@ -18,8 +18,8 @@ transfer = False
 file = False
 transfer_file = False
 sender = False
-header_format = "BHHHHHH"
-header_size = 14  # header format 13 + 1 padding
+header_format = "BHHHHH"
+header_size = 12  # header format 11 + 1 padding
 
 
 def reset_global_variables():  # RESET GLOBAL VARIABLES
@@ -62,10 +62,10 @@ def end_threads(user_inp_thread, keep_ali_thread):
 
 
 # --------------------------------   HEADER CREATE/RETRIEVE
-def create_header(head_type, sequence_number, acknowledgment_number, fragment_offset, window_size, data_length, crc):
+def create_header(head_type, sequence_number, acknowledgment_number, window_size, data_length, crc):
     global header_format
     header = struct.pack(header_format, head_type, sequence_number, acknowledgment_number,
-                         fragment_offset, window_size, data_length, crc)
+                         window_size, data_length, crc)
     return header
 
 
@@ -74,13 +74,11 @@ def retrieve_header(packet):
     header = packet[:header_size]
     # Unpack the header to retrieve the values
     unpacked_data = struct.unpack(header_format, header)
-    (header_type, sequence_number, acknowledgment_number, fragment_offset,
-     window_size, data_length, crc) = unpacked_data
+    (header_type, sequence_number, acknowledgment_number, window_size, data_length, crc) = unpacked_data
     return {
         'header_type': header_type,
         'sequence_number': sequence_number,
         'acknowledgment_number': acknowledgment_number,
-        'fragment_offset': fragment_offset,
         'window_size': window_size,
         'data_length': data_length,
         'crc': crc,
@@ -89,10 +87,9 @@ def retrieve_header(packet):
 
 # --------------------------------   SENT PACKAGE STUFF
 def send_packet_data(type_header, socket_your, address_port_sending, sequence_number, acknowledgment_number,
-                     fragment_offset, window_size, data_length, crc, data):
+                     window_size, data_length, crc, data):
     global header_format
-    header = struct.pack(header_format, type_header, sequence_number, acknowledgment_number, fragment_offset,
-                         window_size, data_length, crc)
+    header = struct.pack(header_format, type_header, sequence_number, acknowledgment_number, window_size, data_length, crc)
     if isinstance(data, bytes):
         encoded_data = data
     else:
@@ -104,7 +101,7 @@ def send_packet_data(type_header, socket_your, address_port_sending, sequence_nu
 
 def send_info_packet_type_only(type_header, socket_your, address_port_sending):
     global header_format
-    header = struct.pack(header_format, type_header, 0, 0, 0, 0, 0, 0)
+    header = struct.pack(header_format, type_header, 0, 0, 0, 0, 0)
     socket_your.sendto(header, address_port_sending)  # send type info message
 
 
@@ -242,14 +239,14 @@ def data_send(socket_your, address_port_sending, file_bool):
             parts.append(string_part)
         #--- SEND TRANSFER INFORMATION
         if file_bool:
-            send_packet_data(6, socket_your, address_port_sending, 0, 0,
+            send_packet_data(6, socket_your, address_port_sending,  0,
                              0, 0, 0, 0, file_name)
-        send_packet_data(6, socket_your, address_port_sending, 0, 0,
+        send_packet_data(6, socket_your, address_port_sending, 0,
                              0, 0, 0, 0, str(len(parts)))
         #---  MAIN ARQ LOOP SEND - SELECTIVE REPEAT
         i = 0
         error = 0
-        window_size = 7
+        window_size = 15
         window_start = 0
         ack_check = [False] * packets_number
         window_end = min(window_size - 1, len(parts) - 1)
@@ -260,12 +257,13 @@ def data_send(socket_your, address_port_sending, file_bool):
             if (currently_not_ack < window_size or window_end < len(parts)) and not sq_num >= len(parts):
                 string_part = parts[sq_num]
                 crc = binascii.crc_hqx(string_part, 0)
-                #-- IF MISTAKE ON 10% CHANCE TO SEND BAD PACKET
-                if mistake == "1":
-                    if random.random() < 0.1:
+                #-- IF MISTAKE ON 7% CHANCE TO SEND BAD PACKET MAX 50 ERRORS
+                if mistake == "1" and error <= 50:
+                    if random.random() < 0.07:
                         crc += 1
+                        error += 1
                 send_packet_data(6, socket_your, address_port_sending, sq_num, 0,
-                                 0, window_size, len(string_part), crc, string_part)
+                                window_size, len(string_part), crc, string_part)
                 currently_not_ack += 1
                 sq_num += 1
             # --- IF WINDOW FILLED RECEIVED PACKETS OR LESS PACKETS
@@ -288,7 +286,7 @@ def data_send(socket_your, address_port_sending, file_bool):
                     string_part = parts[ack_num]
                     crc = binascii.crc_hqx(string_part, 0)
                     send_packet_data(6, socket_your, address_port_sending, ack_num, 0,
-                                     0, window_size, len(string_part), crc, string_part)
+                                      window_size, len(string_part), crc, string_part)
             #--- CHECK IF ALL PACKETS ACKED
             if all(ack_check):
                 break
@@ -364,12 +362,12 @@ def data_receive(socket_your, address_port_sending, file_bool):
                         parts[seq_num] = data.decode()
                     received[seq_num] = True  # Mark the packet as received
                     send_packet_data(2, socket_your, address_port_sending, 0,
-                                 seq_num, 0, window_size, 0, 0, "")
+                                 seq_num, window_size, 0, 0, "")
             else:
                 #--- RECEIVED WRONG NACK SEND
                 print("Packet : " + str(seq_num + 1) + "  received wrong SENDING NACK:", address_port_sending)
                 send_packet_data(7, socket_your, address_port_sending, 0,
-                                 seq_num, 0, window_size, 0, 0, "")
+                                 seq_num,  window_size, 0, 0, "")
             if all(received):
                 break
         print("File,Message received okay. \n")
@@ -385,7 +383,7 @@ def data_receive(socket_your, address_port_sending, file_bool):
             print("Message size: " + str(message_size) + " B")
         else:
             #---  IF FILE PRINT INFORMATION AND SAVE THE FILE
-            decoded_file_name = "1" + decoded_file_name # FOR TESTING ADDING 1 TO NAME 
+            decoded_file_name = "1" + decoded_file_name # FOR TESTING ADDING 1 TO NAME
             file_path = input("Enter path where to save C:/.../  or (yes) to receive in working directory: ")
             #--- SAVE FILE
             if file_path == "yes":
