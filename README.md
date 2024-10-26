@@ -1,7 +1,13 @@
 # P2P Communication Protocol
 
-## Initialization of Peer-to-Peer Communication
+## Run
+To run the P2P Communication Protocol, execute the following command in your terminal:
 
+```bash
+python main.py
+```
+
+## Initialization of Peer-to-Peer Communication
 The `peer_to_peer_start()` function initiates communication by specifying the following parameters:
 - **Port**: The port number to be used for communication.
 - **Target User Port**: The port number of the user being connected to.
