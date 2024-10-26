@@ -3,9 +3,9 @@
 # --------------------------------   SELECTIVE REPEAT ARQ
 
 # ---- IMPORTS
-import binascii, random, socket
+import binascii, random, socket, os
 from header_to_json import retrieve_header
-from transfer_information import print_transfer_info_file, print_transfer_info_message
+from print_transfer_information import print_transfer_info_file, print_transfer_info_message
 from create_send_packets import send_packet_data
 from globals import *
 
@@ -27,8 +27,19 @@ def data_send(socket_your, address_port_sending, file_bool):
 
         # ---- GET INPUT FROM USER
         if file_bool:
-            file_name = input("Enter file name : ")
-            path = input("Enter path where to find file C:/.../  or (yes) if in working directory: ")
+            while True:
+                try:
+                    file_name = input("Enter file name : ")
+                    path = input("Enter path where to find file C:/.../  or (yes) if in working directory: ")
+                    if path == "yes":
+                        path = file_name
+                    else:
+                        path = path + "\\" + file_name
+                    file_in = open(path, "rb")
+                    file_size = os.path.getsize(path)
+                    break
+                except FileNotFoundError:
+                    print(f"Error: The file '{path}' was not found.")
         else:
             string_to_send = input("Enter message to send : ")
         # --- SET UP FRAGMENT SIZE
@@ -39,7 +50,7 @@ def data_send(socket_your, address_port_sending, file_bool):
 
         # --- PRINT INFORMATION ABOUT TRANSFER AND GET FILE
         if file_bool:
-            string_to_send, packets_number = print_transfer_info_file(path, file_name, fragment_size)
+            string_to_send, packets_number = print_transfer_info_file(file_in, file_name, path, fragment_size, file_size)
         else:
             packets_number = print_transfer_info_message(string_to_send, fragment_size)
 
@@ -106,7 +117,7 @@ def data_send(socket_your, address_port_sending, file_bool):
             # --- CHECK IF ALL PACKETS ACKED
             if all(ack_check):
                 break
-    # --- CATCH ERRORS
+        file_in.close()
     except socket.timeout:
         print("Timeout, no response. Retrying...")
     except ConnectionResetError:

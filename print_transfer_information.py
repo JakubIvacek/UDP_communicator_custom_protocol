@@ -1,19 +1,12 @@
 #---------
 #---- PRINT INFORMATION ABOUT TRANSFER
 # ---------
-import os
 import math
 
 # --- READ FILE , AND PRINT TRANSFER INFORMATION
 # ---
 # ----- FILENAME - PATH - FRAGMENT COUNT - FRAGMENT SIZE - LAST FRAGMENT SIZE
-def print_transfer_info_file(path, file_name, fragment_size):
-    if path == "yes":
-        path = file_name
-    else:
-        path = path + "\\" + file_name
-    file_in = open(path, "rb")
-    file_size = os.path.getsize(path)
+def print_transfer_info_file(file_in, file_name, path, fragment_size, file_size):
     packets_number = math.ceil(file_size / fragment_size)
     last_fragment_size = file_size % fragment_size
     string_to_send = file_in.read()
