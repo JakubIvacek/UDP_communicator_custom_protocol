@@ -4,7 +4,7 @@
 #---- RETURNS --- YOUR_SOCKET , TUPLE_ADDRESS_HOST_OTHER
 import socket
 import time
-from packets_send import send_info_packet_type_only
+from create_send_packets import send_info_packet_type_only
 from header_to_json import retrieve_header
 
 def peer_to_peer_start():  # P2P start
