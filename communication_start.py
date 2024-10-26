@@ -1,16 +1,15 @@
-#---------
-#---- P2P COMMUNICATION START FUNCTION
-# ---------
-#---- RETURNS --- YOUR_SOCKET , TUPLE_ADDRESS_HOST_OTHER
+#---- P2P COMMUNICATION INITIATION
+
+# Imports
 import socket
 import time
 from create_send_packets import send_info_packet_type_only
 from header_to_json import retrieve_header
 
-def peer_to_peer_start():  # P2P start
+# P2P start
+def peer_to_peer_start():
     print("peerToPeer Start")
     connected = False
-    # SET USER INPUT
     port_your = input("Input port you are listening on: ")
     address_sending = input("Input ip you are sending to: ")
     port_sending = input("Input port you are sending to: ")

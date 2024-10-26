@@ -1,6 +1,6 @@
-#----
 # ---------  RETURN JSON HEADER FROM PACKET
-#---
+
+# Imports
 import struct
 header_format = "BHHHHH"
 header_size = 12  # header format 11 + 1 padding

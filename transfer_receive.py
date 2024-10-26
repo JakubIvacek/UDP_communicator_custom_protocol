@@ -1,5 +1,5 @@
 
-# Data transfer over udp with own SELECTIVE REPEAT ARQ implementation
+# Data receive over udp with own SELECTIVE REPEAT ARQ implementation
 
 # Imports
 import binascii, time, socket, os
@@ -31,8 +31,8 @@ def data_receive(socket_your, address_port_sending, file_bool):
             fragment_count = int(data[header_size:].decode())
         else:
             fragment_count = int(data[header_size:].decode())
-        # MAIN SENDING LOOP
-        parts, fragment_size = sender_selective_repeat_arq(fragment_count, socket_your, address_port_sending, file_bool)
+        # MAIN RECEIVING LOOP
+        parts, fragment_size = receiver_selective_repeat_arq(fragment_count, socket_your, address_port_sending, file_bool)
 
         end_time = time.time()
         transfer_time = end_time - start_time
@@ -66,7 +66,7 @@ def data_receive(socket_your, address_port_sending, file_bool):
         print(f"Error occurred: {e}")
 
 # Main sending loop returns packets in right order and size of fragment
-def sender_selective_repeat_arq(fragment_count, socket_your, address_port_sending, file_bool):
+def receiver_selective_repeat_arq(fragment_count, socket_your, address_port_sending, file_bool):
     parts = [None] * fragment_count
     received = [False] * fragment_count
     parts = [None] * fragment_count

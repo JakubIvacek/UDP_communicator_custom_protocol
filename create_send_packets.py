@@ -1,10 +1,8 @@
-#----
 # ---------  PACKETS SENT FUNCTIONS
-#---
+
 import struct
 header_format = "BHHHHH"
 
-#
 # ---- SEND PACKET WITH DATA
 def send_packet_data(type_header, socket_your, address_port_sending, sequence_number, acknowledgment_number,
                      window_size, data_length, crc, data):
@@ -18,7 +16,6 @@ def send_packet_data(type_header, socket_your, address_port_sending, sequence_nu
     # Send the header and data together
     socket_your.sendto(header + encoded_data, address_port_sending)
 
-#
 # ---- SEND ONLY INFORMATION PACKET WITHOUT DATA
 def send_info_packet_type_only(type_header, socket_your, address_port_sending):
     global header_format
