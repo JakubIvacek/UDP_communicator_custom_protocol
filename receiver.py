@@ -43,7 +43,16 @@ def data_receive(socket_your, address_port_sending, file_bool):
         else:
             # Get path where to send, and save file
             decoded_file_name = "1" + decoded_file_name # FOR TESTING ADDING 1 TO NAME
-            file_path = input("Enter path where to save C:/.../  or (yes) to receive in working directory: ")
+            while True:
+                file_path = input("Enter path where to save C:/.../  or (yes) to receive in working directory: ")
+                # Check if the user chose the working directory
+                if file_path.lower() == "yes":
+                    break
+                # Check if dir exists
+                elif os.path.exists(os.path.dirname(file_path)):
+                    break
+                else:
+                    print("Invalid path. Please enter a valid directory path or 'yes' to use the working directory.")
             if file_path == "yes":
                 path = decoded_file_name
             else:

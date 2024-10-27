@@ -74,6 +74,38 @@ The checksum is calculated using **CRC-16**. This method uses a polynomial as a 
 
 The receiver then performs the same XOR division on the received data. If the remainder is zero, data integrity is confirmed.
 
+## Lua Script for Wireshark
+
+This project includes a custom Lua dissector for Wireshark that allows you to analyze your Peer-to-Peer Communication Protocol packets.
+
+### Setting Up the Lua Script
+
+1. **Location of the Lua Script**:
+   - Place the Lua script file (e.g., `custom.lua`) in the Wireshark plugins directory. This directory is usually located at:
+     - **Windows**: `C:\Program Files\Wireshark\plugins`
+     - **macOS**: `/Applications/Wireshark.app/Contents/Plugins`
+     - **Linux**: `/usr/lib/wireshark/plugins` or `/usr/local/lib/wireshark/plugins`
+
+2. **Enabling Lua in Wireshark**:
+   - Ensure Lua is enabled in Wireshark. You can check this in Wireshark’s preferences:
+     - Go to **Edit** > **Preferences** > **Protocols** > **Lua**.
+     - Check the option to enable Lua scripting.
+
+### Running Wireshark with the Lua Script
+
+1. **Start Wireshark**: Open Wireshark as you normally would.
+2. **Load Your Custom Protocol**: When capturing packets, your custom protocol will now appear in the packet list if packets match the defined criteria (e.g., specific port).
+3. **Inspect Packets**: Click on the packets to see detailed information extracted by the Lua dissector, including header fields and payload data.
+
+### Example Usage
+
+- The custom Lua dissector is set to listen for packets on a specific UDP port. You can modify the port number in the Lua script to match the port your P2P protocol is using.
+
+```lua
+-- Register the protocol to a specific port (replace 1234 with your port)
+local udp_table = DissectorTable.get("udp.port")
+udp_table:add(1234, my_protocol)
+```
 ## ARQ Method
 
 The **Selective Repeat (SR)** protocol, an enhancement of the Go-Back-N protocol, is implemented using the following fields:

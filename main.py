@@ -5,8 +5,9 @@ import socket, threading, time
 from header_to_json import retrieve_header
 from communication_start import peer_to_peer_start
 from create_send_packets import send_info_packet_type_only
-from transfer_sender import data_send
-from transfer_receive import data_receive
+from sender import data_send
+from receiver import data_receive
+from globals import *
 
 # Function to reset global control variables to initial states
 def reset_global_variables():
