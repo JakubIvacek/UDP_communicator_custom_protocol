@@ -9,5 +9,5 @@ file = False
 transfer_file = False
 sender = False
 header_format = "BHHHHH"
-header_size = 12  # header format 11 + 1 padding
-max_fragment_size = 1460 # IP + UDP + MINE = 40 B
+header_size = 8  # header format 7 + 1 padding
+max_fragment_size = 1464 # IP + UDP + MINE = 36 B

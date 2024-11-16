@@ -3,7 +3,6 @@
 
 # Imports
 import binascii, time, socket, os
-
 from anyio import sleep
 
 from header_to_json import retrieve_header
@@ -94,6 +93,7 @@ def receiver_selective_repeat_arq(fragment_count, socket_your, address_port_send
     parts = [None] * fragment_count
     fragment_size = 0
     count_no_signal = 0
+    window_size = 29
     # --- MAIN LOOP
     while count_no_signal < 3 and not all(received):
         try:
@@ -103,8 +103,7 @@ def receiver_selective_repeat_arq(fragment_count, socket_your, address_port_send
                 header = retrieve_header(packet)
                 crc = header.get("crc")
                 data = packet[header_size:]
-                seq_num = header.get("sequence_number")
-                window_size = header.get("window_size")
+                seq_num = header.get("packet_number")
                 if fragment_size == 0: fragment_size = header.get("data_length")
 
                 # --- CHECK CRC AND ACK OR NACK
@@ -119,13 +118,11 @@ def receiver_selective_repeat_arq(fragment_count, socket_your, address_port_send
                         else:
                             parts[seq_num] = data.decode()
                         received[seq_num] = True  # Mark the packet as received
-                        send_packet_data(2, socket_your, address_port_sending, 0,
-                                         seq_num, window_size, 0, 0, "")
+                        send_packet_data(2, socket_your, address_port_sending, seq_num, 0, crc, "")
                 else:
                     # --- RECEIVED WRONG NACK SEND
                     print("Packet : " + str(seq_num + 1) + "  received wrong SENDING NACK:", address_port_sending)
-                    send_packet_data(7, socket_your, address_port_sending, 0,
-                                     seq_num, window_size, 0, 0, "")
+                    send_packet_data(7, socket_your, address_port_sending, seq_num, 0, crc, "")
                 if all(received):
                     break
         except ConnectionResetError:

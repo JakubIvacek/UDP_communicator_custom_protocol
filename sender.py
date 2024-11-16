@@ -45,9 +45,9 @@ def data_send(socket_your, address_port_sending, file_bool):
                         print(f"Error: The file '{path}' was not found.")
             else:
                 string_to_send = input("Enter message to send : ")
-            fragment_size = int(input("Enter fragment size : max 1460 :"))
+            fragment_size = int(input("Enter fragment size : max 1464 :"))
             while 0 >= fragment_size or max_fragment_size < fragment_size:
-                fragment_size = int(input("Enter fragment size :  max 1460 :"))
+                fragment_size = int(input("Enter fragment size :  max 1464 :"))
             mistake = input("Enter 1 if u want bad packet receive : ")
 
             # Print transfer information
@@ -71,9 +71,9 @@ def data_send(socket_your, address_port_sending, file_bool):
             # Send filename, fragment_count
             if file_bool:
                 send_packet_data(6, socket_your, address_port_sending,  0,
-                                 0, 0, 0, 0, file_name)
+                                 0, 0, file_name)
             send_packet_data(6, socket_your, address_port_sending, 0,
-                             0, 0, 0, 0, str(len(parts)))
+                             0, 0, str(len(parts)))
             # MAIN SENDING LOOP
             sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, address_port_sending)
             send_successfully = True
@@ -113,8 +113,7 @@ def sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, add
                         if random.random() < 0.07:
                             crc += 1
                             error += 1
-                    send_packet_data(6, socket_your, address_port_sending, sq_num, 0,
-                                     window_size, len(string_part), crc, string_part)
+                    send_packet_data(6, socket_your, address_port_sending, sq_num, len(string_part), crc, string_part)
                     currently_not_ack += 1
                     sq_num += 1
                 # --- IF WINDOW FILLED RECEIVED PACKETS OR LESS PACKETS
@@ -122,7 +121,7 @@ def sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, add
                     packet, _ = socket_your.recvfrom(1500)
                     header = retrieve_header(packet)
                     type_header = header.get("header_type")
-                    ack_num = header.get("acknowledgment_number")
+                    ack_num = header.get("packet_number")
                     # --- ACK RECEIVED
                     if type_header == 2:
                         print(f"PACKET {ack_num + 1} - ACK RECEIVED, arrived correct:", address_port_sending)
@@ -136,8 +135,7 @@ def sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, add
                         # --- RETRANSMIT THE LOST PACKET
                         string_part = parts[ack_num]
                         crc = binascii.crc_hqx(string_part, 0)
-                        send_packet_data(6, socket_your, address_port_sending, ack_num, 0,
-                                         window_size, len(string_part), crc, string_part)
+                        send_packet_data(6, socket_your, address_port_sending, ack_num, len(string_part), crc, string_part)
                 # --- CHECK IF ALL PACKETS ACKED
                 if all(ack_check):
                     break
