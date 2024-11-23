@@ -3,6 +3,7 @@
 # Imports
 import binascii, random, socket, os
 from time import sleep
+import time
 
 from header_to_json import retrieve_header
 from print_transfer_information import print_transfer_info_file, print_transfer_info_message
@@ -101,8 +102,12 @@ def sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, add
     currently_not_ack = 0
     sq_num = 0
     count_no_signal = 0
+
+    packet_timers = {i: None for i in range(packets_number)}
+    timeout_threshold = 2.0
     while count_no_signal < 3 and not all(ack_check):
         try:
+            current_time = time.time()
             while True:
                 # --- IF WINDOW NOT FILLED SEND PACKET OR NOT ENOUGH LEFT TO FILL THE WINDOW
                 if (currently_not_ack < window_size or window_end < len(parts)) and not sq_num >= len(parts):
@@ -116,6 +121,17 @@ def sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, add
                     send_packet_data(6, socket_your, address_port_sending, sq_num, len(string_part), crc, string_part)
                     currently_not_ack += 1
                     sq_num += 1
+                #check if some packets timeout if yes send again
+                for packet_num in range(window_start, min(window_start + window_size, packets_number)):
+                    if not ack_check[packet_num]:
+                        if packet_timers[packet_num] and (current_time - packet_timers[packet_num] > timeout_threshold):
+                            print(f"Timeout for packet {packet_num + 1}, retransmitting...")
+                            string_part = parts[packet_num]
+                            crc = binascii.crc_hqx(string_part, 0)
+                            send_packet_data(6, socket_your, address_port_sending, packet_num, len(string_part), crc,
+                                             string_part)
+                            # Restart the timer
+                            packet_timers[packet_num] = current_time
                 # --- IF WINDOW FILLED RECEIVED PACKETS OR LESS PACKETS
                 if currently_not_ack >= window_size or window_end >= len(parts) or len(parts) < window_size:
                     packet, _ = socket_your.recvfrom(1500)
@@ -129,6 +145,7 @@ def sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, add
                         window_end += 1
                         currently_not_ack -= 1
                         ack_check[ack_num] = True
+                        packet_timers[ack_num] = None
                     # --- NACK RECEIVED
                     elif type_header == 7:
                         print(f"PACKET {ack_num + 1} - NACK RECEIVED, arrived wrong:", address_port_sending)
@@ -136,6 +153,7 @@ def sender_selective_repeat_arq(parts, packets_number, mistake, socket_your, add
                         string_part = parts[ack_num]
                         crc = binascii.crc_hqx(string_part, 0)
                         send_packet_data(6, socket_your, address_port_sending, ack_num, len(string_part), crc, string_part)
+                        packet_timers[ack_num] = current_time
                 # --- CHECK IF ALL PACKETS ACKED
                 if all(ack_check):
                     break
